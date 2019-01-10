@@ -8,5 +8,5 @@ edition = "2018"
 enum_primitive = "0.1.1"
 libc = "0.2.43"
 num = "0.2.0"
-terminal_size = "0.1.8"
+terminal_size = { git = "https://github.com/TimDeve/terminal-size.git" }
 termios = "0.3.1"

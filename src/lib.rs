@@ -11,7 +11,7 @@ use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::os::unix::io::AsRawFd;
 use std::{io, process};
-use terminal_size::{terminal_size, Height, Width};
+use terminal_size::{terminal_size_using_fd, Height};
 use termios::{cfmakeraw, tcsetattr, Termios, TCSANOW};
 
 pub fn select(lines: Vec<String>) -> Vec<String> {
@@ -118,7 +118,7 @@ impl SelectorState {
             self.selector_index = self.selector_index + 1;
         }
 
-        if self.selector_index > (self.top_of_screen_index + get_screen_height() - 2) {
+        if self.selector_index > (self.top_of_screen_index + self.get_screen_height() - 2) {
             self.top_of_screen_index = self.top_of_screen_index + 1;
         }
     }
@@ -159,8 +159,9 @@ impl SelectorState {
             })
             .collect();
 
-        if lines.len() > get_screen_height() {
-            lines[self.top_of_screen_index..(self.top_of_screen_index + get_screen_height() - 1)]
+        if lines.len() > self.get_screen_height() {
+            lines[self.top_of_screen_index
+                ..(self.top_of_screen_index + self.get_screen_height() - 1)]
                 .to_vec()
         } else {
             lines
@@ -208,6 +209,13 @@ impl SelectorState {
 
         process::exit(exit_code);
     }
+
+    fn get_screen_height(&self) -> usize {
+        let (_, Height(h)) =
+            terminal_size_using_fd(self.tty.as_raw_fd()).expect("Could not get screen size");
+
+        h as usize
+    }
 }
 
 fn marshal_strings_into_lines(strings: Vec<String>) -> Vec<Line> {
@@ -218,12 +226,6 @@ fn marshal_strings_into_lines(strings: Vec<String>) -> Vec<Line> {
             is_selected: false,
         })
         .collect()
-}
-
-fn get_screen_height() -> usize {
-    let (_, Height(h)) = terminal_size().unwrap_or((Width(80), Height(30)));
-
-    h as usize
 }
 
 #[cfg(test)]
