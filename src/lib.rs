@@ -64,15 +64,15 @@ struct SelectorState {
 
 impl SelectorState {
     fn new(strings: Vec<String>) -> SelectorState {
-        let tty = File::open("/dev/tty").unwrap();
+        let tty = File::open("/dev/tty").expect("Failed to open /dev/tty");
 
         SelectorState {
             max_number_of_lines: 0,
             top_of_screen_index: 0,
             selector_index: 0,
             lines: marshal_strings_into_lines(strings),
-            original_term: Termios::from_fd(tty.as_raw_fd()).unwrap(),
-            term: Termios::from_fd(tty.as_raw_fd()).unwrap(),
+            original_term: Termios::from_fd(tty.as_raw_fd()).expect("Failed to create Termios"),
+            term: Termios::from_fd(tty.as_raw_fd()).expect("Failed to create Termios"),
             tty,
         }
     }
@@ -81,8 +81,8 @@ impl SelectorState {
         let stdout = io::stdout();
         let mut buffer = [0; 3];
 
-        stdout.lock().flush().unwrap();
-        self.tty.read(&mut buffer).unwrap();
+        stdout.lock().flush().expect("Failed to flush stdout");
+        self.tty.read(&mut buffer).expect("Failed to read from tty");
 
         if buffer[1] != 0 {
             return None;
@@ -184,11 +184,13 @@ impl SelectorState {
 
     fn set_terminal_to_raw(&mut self) {
         cfmakeraw(&mut self.term);
-        tcsetattr(self.tty.as_raw_fd(), TCSANOW, &mut self.term).unwrap();
+        tcsetattr(self.tty.as_raw_fd(), TCSANOW, &mut self.term)
+            .expect("Failed to set terminal to raw");
     }
 
     fn reset_terminal(&self) {
-        tcsetattr(self.tty.as_raw_fd(), TCSANOW, &self.original_term).unwrap();
+        tcsetattr(self.tty.as_raw_fd(), TCSANOW, &self.original_term)
+            .expect("Failed to reset terminal");
     }
 
     fn cleanup_and_exit(&self, exit_code: i32) {
@@ -210,7 +212,7 @@ fn marshal_strings_into_lines(strings: Vec<String>) -> Vec<Line> {
 }
 
 fn get_screen_height() -> usize {
-    let (_, Height(h)) = terminal_size().unwrap();
+    let (_, Height(h)) = terminal_size().expect("Failed to get terminal height");
 
     h as usize
 }
