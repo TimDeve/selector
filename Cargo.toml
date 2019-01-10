@@ -1,8 +1,0 @@
-[package]
-name = "giadd"
-version = "0.1.0"
-authors = ["Tim Deve <timdeve@users.noreply.github.com>"]
-edition = "2018"
-
-[dependencies]
-selector = { path = "selector" }
