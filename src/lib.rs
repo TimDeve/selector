@@ -7,6 +7,7 @@ extern crate termios;
 
 use num::FromPrimitive;
 use std::fs::File;
+use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::os::unix::io::AsRawFd;
 use std::{io, process};
@@ -25,7 +26,7 @@ pub fn select(lines: Vec<String>) -> Vec<String> {
 
         if let Some(strings) = state.read_input() {
             state.reset_terminal();
-            state.clear_screen();
+            state.move_cursor_to_top();
             return strings;
         } else {
             state.reset_terminal();
@@ -64,15 +65,20 @@ struct SelectorState {
 
 impl SelectorState {
     fn new(strings: Vec<String>) -> SelectorState {
-        let tty = File::open("/dev/tty").expect("Failed to open /dev/tty");
+        let tty = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open("/dev/tty")
+            .expect("Failed to open /dev/tty");
+        let term = Termios::from_fd(tty.as_raw_fd()).expect("Failed to create Termios");
 
         SelectorState {
             max_number_of_lines: 0,
             top_of_screen_index: 0,
             selector_index: 0,
             lines: marshal_strings_into_lines(strings),
-            original_term: Termios::from_fd(tty.as_raw_fd()).expect("Failed to create Termios"),
-            term: Termios::from_fd(tty.as_raw_fd()).expect("Failed to create Termios"),
+            original_term: term.clone(),
+            term,
             tty,
         }
     }
@@ -161,25 +167,15 @@ impl SelectorState {
         }
     }
 
-    fn clear_screen(&self) {
-        move_terminal_cursor_up(self.max_number_of_lines);
-
-        let size = terminal_size();
-        if let Some((Width(w), _)) = size {
-            for _ in 0..self.max_number_of_lines {
-                println!("{}", " ".repeat(w as usize));
-            }
-            move_terminal_cursor_up(self.max_number_of_lines + 1);
-            println!("");
-        }
-    }
-
     fn display(&mut self, lines: Vec<String>) {
-        self.clear_screen();
+        self.move_cursor_to_top();
 
         self.max_number_of_lines = lines.len();
 
-        println!("{}", lines.join("\n"));
+        let output = format!("{}\n", lines.join("\n"));
+        self.tty
+            .write(&(output.into_bytes()))
+            .expect("Failed to write to tty");
     }
 
     fn set_terminal_to_raw(&mut self) {
@@ -193,9 +189,22 @@ impl SelectorState {
             .expect("Failed to reset terminal");
     }
 
-    fn cleanup_and_exit(&self, exit_code: i32) {
+    fn move_cursor_to_top(&mut self) {
+        self.move_terminal_cursor_up(self.max_number_of_lines);
+    }
+
+    fn move_terminal_cursor_up(&mut self, line: usize) {
+        if line != 0 {
+            let escape_sequence = format!("\x1b[{}A", line);
+            self.tty
+                .write(&(escape_sequence.into_bytes()))
+                .expect("Failed to write to tty");
+        }
+    }
+
+    fn cleanup_and_exit(&mut self, exit_code: i32) {
         self.reset_terminal();
-        self.clear_screen();
+        self.move_cursor_to_top();
 
         process::exit(exit_code);
     }
@@ -212,15 +221,9 @@ fn marshal_strings_into_lines(strings: Vec<String>) -> Vec<Line> {
 }
 
 fn get_screen_height() -> usize {
-    let (_, Height(h)) = terminal_size().expect("Failed to get terminal height");
+    let (_, Height(h)) = terminal_size().unwrap_or((Width(80), Height(30)));
 
     h as usize
-}
-
-fn move_terminal_cursor_up(line: usize) {
-    if line != 0 {
-        print!("\x1b[{}A", line);
-    }
 }
 
 #[cfg(test)]
