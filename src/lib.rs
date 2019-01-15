@@ -11,7 +11,7 @@ use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::os::unix::io::AsRawFd;
 use std::{io, process};
-use terminal_size::{terminal_size_using_fd, Height};
+use terminal_size::{terminal_size_using_fd, Height, Width};
 use termios::{cfmakeraw, tcsetattr, Termios, TCSANOW};
 
 pub fn select(lines: Vec<String>) -> Vec<String> {
@@ -26,7 +26,7 @@ pub fn select(lines: Vec<String>) -> Vec<String> {
 
         if let Some(strings) = state.read_input() {
             state.reset_terminal();
-            state.move_cursor_to_top();
+            state.clear_screen();
             return strings;
         } else {
             state.reset_terminal();
@@ -169,7 +169,7 @@ impl SelectorState {
     }
 
     fn display(&mut self, lines: Vec<String>) {
-        self.move_cursor_to_top();
+        self.clear_screen();
 
         self.max_number_of_lines = lines.len();
 
@@ -190,6 +190,22 @@ impl SelectorState {
             .expect("Failed to reset terminal");
     }
 
+    fn clear_screen(&mut self) {
+        self.move_cursor_to_top();
+
+        let (Width(term_width), _) =
+            terminal_size_using_fd(self.tty.as_raw_fd()).expect("Could not get screen size");
+
+        let empty_line = format!("{}\n", " ".repeat(term_width as usize));
+        let output = format!("{}", empty_line.repeat(self.max_number_of_lines));
+
+        self.tty
+            .write(&(output.into_bytes()))
+            .expect("Failed to write to tty");
+
+        self.move_cursor_to_top();
+    }
+
     fn move_cursor_to_top(&mut self) {
         self.move_terminal_cursor_up(self.max_number_of_lines);
     }
@@ -205,7 +221,7 @@ impl SelectorState {
 
     fn cleanup_and_exit(&mut self, exit_code: i32) {
         self.reset_terminal();
-        self.move_cursor_to_top();
+        self.clear_screen();
 
         process::exit(exit_code);
     }
