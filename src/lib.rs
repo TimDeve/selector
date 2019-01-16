@@ -121,6 +121,10 @@ impl SelectorState {
         if self.selector_index > (self.top_of_screen_index + self.get_screen_height() - 2) {
             self.top_of_screen_index = self.top_of_screen_index + 1;
         }
+
+        if self.selector_index == 0 {
+            self.top_of_screen_index = 0;
+        }
     }
 
     fn move_selector_up(&mut self) {
@@ -132,6 +136,14 @@ impl SelectorState {
 
         if self.selector_index < self.top_of_screen_index {
             self.top_of_screen_index = self.top_of_screen_index - 1;
+        }
+
+        if self.selector_index == self.lines.len() - 1 {
+            self.top_of_screen_index =
+                match (self.lines.len() + 1).checked_sub(self.get_screen_height()) {
+                    Some(index) => index,
+                    None => 0,
+                }
         }
     }
 
